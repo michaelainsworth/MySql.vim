@@ -104,7 +104,7 @@ function! s:InArrayOperator(type)
         endwhile
 
         if l:i == 0
-            let l:result .= '( '
+            let l:result .= 'in ( '
         else
             let l:result .= ', '
         endif
