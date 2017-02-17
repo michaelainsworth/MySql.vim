@@ -74,10 +74,62 @@ inoreabbrev <buffer> itbls
 " ========================================================================= }}}
 
 " Custom Operators {{{ ========================================================
+" 'in array' operator {{{ -----------------------------------------------------
+function! s:InArrayOperator(type)
+    let l:old_register = @@
+    if a:type !=# 'V'
+        return
+    endif
+
+    execute "normal! `<v`>x"   
+
+    let l:lines = split(@@, "\n")
+    let l:result = ''
+
+    let l:i = 0
+    let l:s = len(l:lines)
+    while l:i < l:s
+        let l:line = ''
+        let l:x = 0
+        let l:z = strlen(l:lines[l:i])
+        while l:x < l:z
+            let l:c = l:lines[l:i][l:x]
+            if l:c ==# "'"
+                let l:line .= l:c . l:c
+            else
+                let l:line .= l:c
+            endif
+
+            let l:x += 1
+        endwhile
+
+        if l:i == 0
+            let l:result .= '( '
+        else
+            let l:result .= ', '
+        endif
+
+        let l:result .= "'" . l:line . "'"    
+
+        if l:i == l:s - 1
+            let l:result .= ' )'
+        endif 
+
+        let l:i += 1
+    endwhile
+
+    put =l:result
+
+    let @@ = l:old_register
+endfunction
+
+nnoremap <buffer> <leader>ia :set operatorfunc=<SID>InArrayOperator<cr>g@
+vnoremap <buffer> <leader>ia :<c-u>call <SID>InArrayOperator(visualmode())<cr>
+" ------------------------------------------------------------------------- }}}
+
 " 'join using' operator {{{ ---------------------------------------------------
 function! s:JoinUsingOperator(type)
     let l:old_register = @@
-    echom a:type
     if a:type ==# 'v'
         execute "normal! `<v`>y"   
     elseif a:type ==# 'V'
@@ -101,7 +153,6 @@ vnoremap <buffer> <leader>ju :<c-u>call <SID>JoinUsingOperator(visualmode())<cr>
 " 'join on' operator {{{ ------------------------------------------------------
 function! s:JoinOnOperator(type)
     let l:old_register = @@
-    echom a:type
     if a:type ==# 'v'
         execute "normal! `<v`>y"   
     elseif a:type ==# 'V'
