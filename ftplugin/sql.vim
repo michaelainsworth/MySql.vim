@@ -5,7 +5,8 @@ endif
 let b:did_ftplugin = 1
 " END PLUGIN SETUP }}}
 " TODOS {{{
-" TODO: Commands that actually query the database for values.
+" TODO: A TableColumns function, which returns a list?
+" TODO: A TablePrimaryKey function, which returns a list?
 "       E.g., alternatively, this could be a motion. That is, select a word
 "       then type <leader>s (for select) and an SQL select statement is
 "       generated.
@@ -120,7 +121,11 @@ endfunction
 " This function takes a string a returns a string suitable for using as an
 " SQL identifier.
 function! s:SqlEscapeIdentifier(str)
-    return '"' . <SID>SqlEscape(a:str, ['"']) . '"'
+    if 1 == match(a:str, '^[_a-z][_a-z0-9]*$')
+        return a:str
+    else
+        return '"' . <SID>SqlEscape(a:str, ['"']) . '"'
+    endif
 endfunction
 " End SqlEscapeIdentifier() }}}
 " END SQL ESCAPE FUNCTIONS }}}
@@ -152,9 +157,7 @@ function! s:SqlTableQualified(name)
         let l:alias = l:parts[l:partlen - 1]
     endif
 
-    " TODO: A TableColumns function, which returns a list?
-    " TODO: A TablePrimaryKey function, which returns a list?
-
+    " Create an return the dictionary.
     let l:result = {'schema':l:schema, 'table':l:table, 'alias':l:alias}
     return l:result
 endfunction
@@ -165,13 +168,13 @@ function! s:SqlTableDequalified(table)
 
     if 0 != strlen(a:table.schema)
         " TODO: Finish this!
-        let l:result = <SID>SqlEscapeIdentifier(a:table.schema) . '.'
+        let l:result = a:table.schema . '.'
     endif
 
-    let l:result .= <SID>SqlEscapeIdentifier(a:table.table)
+    let l:result .= a:table.table
 
     if a:include_alias = 1
-        let l:result .= ' ' . <SID>SqlEscapeIdentifier(a:table.alias)
+        let l:result .= ' ' . a:table.alias
     endif
 
     return l:result
@@ -183,6 +186,10 @@ endfunction
 " TODO: Change all functions to accept a string for a table name -
 " the calling function should always qualify it.
 function! s:SqlTableColumns(table)
+    if type(a:table) != 1
+        throw 'SqlTableColumns: a:table must be a string!'
+    endif
+
     let l:table = <SID>SqlTableQualified(a:table)
 
     let l:does_table_exist = <SID>SqlTableDoesExist(table)
@@ -224,7 +231,7 @@ function! s:SqlTableDoesExist(name)
     let l:count = <SID>SystemExecute('psql -tAc ' . shellescape(l:sql))
 
     if l:count > 1
-        throw "There is more than 1 table named " . l:table.name . "!"
+        throw 'SqlTableDoesExist: There is more than 1 table named "' . l:table.name . '"!'
     endif
 
     return l:count
@@ -249,7 +256,7 @@ function! s:SelectOperator(type)
 
     let l:table = <SID>SqlTableQualified(l:selection)
     if 0 == <SID>SqlTableDoesExist(l:selection)
-        throw "The table " . l:selection . " doesn't exist!"
+        throw 'SelectOperator: The table ' . l:selection . ' does not exist!'
     endif
 
     " TODO: quick function call to obtain all the columns for a table, with
