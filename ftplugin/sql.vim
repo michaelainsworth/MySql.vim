@@ -189,12 +189,21 @@ function! s:SelectOperator(type)
         throw "The table " . l:selection . " doesn't exist!"
     endif
 
+    " TODO: quick function call to obtain all the columns for a table, with
+    " alias
+
     " TODO: Wrap into a ExecutePsql call?
     let l:sql = "select "
+    let l:sql.= "    '    ' || "
     let l:sql.= "    case "
-    let l:sql.= "        when row_number() over () = 1 then '      ' "
-    let l:sql.= "        else '    , ' "
-    let l:sql.= "    end || column_name "
+    let l:sql.= "        when row_number() over () = 1 then '  ' "
+    let l:sql.= "        else ', ' "
+    let l:sql.= "    end || "
+    let l:sql.= "    case "
+    let l:sql.= "        when " . <SID>EscapeSqlString(l:table.alias) . " = '' then ''"
+    let l:sql.= "        else " . <SID>EscapeSqlString(l:table.alias) . " || '.'"
+    let l:sql.= "    end || "
+    let l:sql.= "    column_name "
     let l:sql.= "from information_schema.columns "
     let l:sql.= "where table_schema = " . <SID>EscapeSqlString(l:table.schema) . " "
     let l:sql.= "and table_name = " . <SID>EscapeSqlString(l:table.table) . " "
@@ -205,6 +214,7 @@ function! s:SelectOperator(type)
     let l:results.= "from " . l:selection . "\n"
     let l:results.= "where true\n"
     let l:results.= "order by 1\n"
+    let l:results.= ";\n"
 
     put =l:results
 
