@@ -1,11 +1,10 @@
-" Plugin setup {{{ ============================================================
+" PLUGIN SETUP {{{
 if exists("b:did_ftplugin")
   finish
 endif
 let b:did_ftplugin = 1
-" ========================================================================= }}}
-
-" TODOS {{{ ===================================================================
+" END PLUGIN SETUP }}}
+" TODOS {{{
 " TODO: Commands that actually query the database for values.
 "       E.g., alternatively, this could be a motion. That is, select a word
 "       then type <leader>s (for select) and an SQL select statement is
@@ -25,9 +24,23 @@ let b:did_ftplugin = 1
 " TODO: whr abbreviation for where clause
 " TODO: The 'join using' and 'join on' operators could query the database for
 "       primary keys...
-" ========================================================================= }}}
-
-" Abbreviations {{{ ===========================================================
+" TODO: The abbreviations should probably be removed - just use the operators
+"       instead.
+" END TODOS }}}
+" GENERAL FUNCTIONS {{{
+" SystemExecute() {{{
+" The SystemExecute() function takes a string and executes it, returning the
+" textual output WITHOUT the last trailing newline.
+" TODO: This function could probably be changed to work with a list of
+" strings, which would help quoting.
+function! s:SystemExecute(command)
+    let l:value = system(a:command)
+    let l:value = substitute(l:value, '\n\+$', '', '')
+    return l:value
+endfunction
+" END SystemExecute() }}}
+" END GENERAL FUNCTIONS }}}
+" SQL ABBREVIATIONS {{{
 " Query a particular tables
 inoreabbrev <buffer> slct 
     \<esc>:set paste<cr>
@@ -71,14 +84,52 @@ inoreabbrev <buffer> itbls
     \<esc>:set nopaste<cr>
     \?select<cr>
     \<esc>:noh<cr>
-" ========================================================================= }}}
+" END SQL ABBREVIATION }}}
+" SQL ESCAPE FUNCTIONS {{{
+" SqlEscape() {{{
+" This function takes a string and doubles any characters it finds in the
+" chars array.
+function! s:SqlEscape(str, chars)
+    let l:result = ''
 
-" Functions {{{ ===============================================================
-" QualifyTable {{{ ------------------------------------------------------------
+    let l:i = 0
+    let l:s = len(a:str)
+
+    while l:i < l:s
+        let l:c = a:str[l:i]
+        if -1 != index(a:chars, l:c)
+            let l:result .= l:c . l:c
+        else
+            let l:result .= l:c
+        endif
+
+        let l:i += 1
+    endwhile
+
+    return l:result
+endfunction
+" END SqlEscape() }}}
+" SqlEscapeString() {{{
+" This function takes a string and escapes any single-quotes and percent
+" signs.
+function! s:SqlEscapeString(str)
+    return "'" . <SID>SqlEscape(a:str, ["'", '%']) . "'"
+endfunction
+" END SqlEscapeString() }}}
+" SqlEscapeIdentifier() {{{
+" This function takes a string a returns a string suitable for using as an
+" SQL identifier.
+function! s:SqlEscapeIdentifier(str)
+    return '"' . <SID>SqlEscape(a:str, ['"']) . '"'
+endfunction
+" End SqlEscapeIdentifier() }}}
+" END SQL ESCAPE FUNCTIONS }}}
+" SQL TABLE FUNCTIONS {{{
+" SqlTableQualified() {{{
 " This function takes a string representing a table name
 " (with optional schema and alias components) and returns a dictionary.
 " This dictionary contains three keys: schema, table and alias
-function! s:QualifyTable(name)
+function! s:SqlTableQualified(name)
     let l:schema = ''
     let l:table = ''
     let l:alias = ''
@@ -101,65 +152,76 @@ function! s:QualifyTable(name)
         let l:alias = l:parts[l:partlen - 1]
     endif
 
-    " TODO: A "dequalifyTable" function?
     " TODO: A TableColumns function, which returns a list?
     " TODO: A TablePrimaryKey function, which returns a list?
 
     let l:result = {'schema':l:schema, 'table':l:table, 'alias':l:alias}
     return l:result
 endfunction
-" ------------------------------------------------------------------------- }}}
-
-" EscapeSql {{{ ------------------------------------------------------------
-" This function takes a string and doubles any characters it finds in the
-" chars array.
-function! s:EscapeSql(str, chars)
+" END SqlTableQualified() }}}
+" SqlTableDequalified() {{{
+function! s:SqlTableDequalified(table)
     let l:result = ''
 
-    let l:i = 0
-    let l:s = len(a:str)
+    if 0 != strlen(a:table.schema)
+        " TODO: Finish this!
+        let l:result = <SID>SqlEscapeIdentifier(a:table.schema) . '.'
+    endif
 
-    while l:i < l:s
-        let l:c = a:str[l:i]
-        if -1 != index(a:chars, l:c)
-            let l:result .= l:c . l:c
-        else
-            let l:result .= l:c
-        endif
+    let l:result .= <SID>SqlEscapeIdentifier(a:table.table)
 
-        let l:i += 1
-    endwhile
+    if a:include_alias = 1
+        let l:result .= ' ' . <SID>SqlEscapeIdentifier(a:table.alias)
+    endif
 
     return l:result
 endfunction
-" ------------------------------------------------------------------------- }}}
+" END SqlTableDequalified() }}}
+" END SQL TABLE FUNCTIONS }}}
+" CUSTOM OPERATORS {{{
+" SqlTableColumns() {{{
+" TODO: Change all functions to accept a string for a table name -
+" the calling function should always qualify it.
+function! s:SqlTableColumns(table)
+    let l:table = <SID>SqlTableQualified(a:table)
 
-" EscapeSqlString {{{ ---------------------------------------------------------
-" This function takes a string and escapes any single-quotes and percent
-" signs.
-function! s:EscapeSqlString(str)
-    return "'" . <SID>EscapeSql(a:str, ["'", '%']) . "'"
+    let l:does_table_exist = <SID>SqlTableDoesExist(table)
+
+
+    let l:sql = "select "
+    let l:sql.= "    '    ' || "
+    let l:sql.= "    case "
+    let l:sql.= "        when row_number() over () = 1 then '  ' "
+    let l:sql.= "        else ', ' "
+    let l:sql.= "    end || "
+    let l:sql.= "    case "
+    let l:sql.= "        when " . <SID>SqlEscapeString(l:table.alias) . " = '' then ''"
+    let l:sql.= "        else " . <SID>SqlEscapeString(l:table.alias) . " || '.'"
+    let l:sql.= "    end || "
+    let l:sql.= "    column_name "
+    let l:sql.= "from information_schema.columns "
+    let l:sql.= "where table_schema = " . <SID>SqlEscapeString(l:table.schema) . " "
+    let l:sql.= "and table_name = " . <SID>SqlEscapeString(l:table.table) . " "
+    let l:sql.= "order by ordinal_position "
+
+    let l:results = "select\n"
+    let l:results.= <SID>SystemExecute('psql -tAc ' . shellescape(l:sql)) . "\n"
+    let l:results.= "from " . l:selection . "\n"
+    let l:results.= "where true\n"
+    let l:results.= "order by 1\n"
+    let l:results.= ";\n"
 endfunction
-" ------------------------------------------------------------------------- }}}
-" ========================================================================= }}}
-
-" Custom Operators {{{ ========================================================
-function! s:ExecuteSystem(command)
-    let l:value = system(a:command)
-    let l:value = substitute(l:value, '\n\+$', '', '')
-    return l:value
-endfunction
-
-" 'select' operator {{{ -------------------------------------------------------
-function! s:DoesTableExist(name)
-    let l:table = <SID>QualifyTable(a:name)
+" END SqlTableColumns() }}}
+" SqlTableDoesExist() {{{
+function! s:SqlTableDoesExist(name)
+    let l:table = <SID>SqlTableQualified(a:name)
 
     let l:sql = "select count(distinct table_schema || table_name) "
     let l:sql.= "from information_schema.tables "
-    let l:sql.= "where table_schema = " . <SID>EscapeSqlString(l:table.schema) . " "
-    let l:sql.= "and table_name = " . <SID>EscapeSqlString(l:table.table) . " "
+    let l:sql.= "where table_schema = " . <SID>SqlEscapeString(l:table.schema) . " "
+    let l:sql.= "and table_name = " . <SID>SqlEscapeString(l:table.table) . " "
 
-    let l:count = <SID>ExecuteSystem('psql -tAc ' . shellescape(l:sql))
+    let l:count = <SID>SystemExecute('psql -tAc ' . shellescape(l:sql))
 
     if l:count > 1
         throw "There is more than 1 table named " . l:table.name . "!"
@@ -167,7 +229,8 @@ function! s:DoesTableExist(name)
 
     return l:count
 endfunction
-
+" END SqlTableDoesExist() }}}
+" SelectOperator() {{{
 function! s:SelectOperator(type)
     let l:old_register = @@
 
@@ -184,8 +247,8 @@ function! s:SelectOperator(type)
     let l:selection = @@
     let @@ = l:old_register
 
-    let l:table = <SID>QualifyTable(l:selection)
-    if 0 == <SID>DoesTableExist(l:selection)
+    let l:table = <SID>SqlTableQualified(l:selection)
+    if 0 == <SID>SqlTableDoesExist(l:selection)
         throw "The table " . l:selection . " doesn't exist!"
     endif
 
@@ -200,17 +263,17 @@ function! s:SelectOperator(type)
     let l:sql.= "        else ', ' "
     let l:sql.= "    end || "
     let l:sql.= "    case "
-    let l:sql.= "        when " . <SID>EscapeSqlString(l:table.alias) . " = '' then ''"
-    let l:sql.= "        else " . <SID>EscapeSqlString(l:table.alias) . " || '.'"
+    let l:sql.= "        when " . <SID>SqlEscapeString(l:table.alias) . " = '' then ''"
+    let l:sql.= "        else " . <SID>SqlEscapeString(l:table.alias) . " || '.'"
     let l:sql.= "    end || "
     let l:sql.= "    column_name "
     let l:sql.= "from information_schema.columns "
-    let l:sql.= "where table_schema = " . <SID>EscapeSqlString(l:table.schema) . " "
-    let l:sql.= "and table_name = " . <SID>EscapeSqlString(l:table.table) . " "
+    let l:sql.= "where table_schema = " . <SID>SqlEscapeString(l:table.schema) . " "
+    let l:sql.= "and table_name = " . <SID>SqlEscapeString(l:table.table) . " "
     let l:sql.= "order by ordinal_position "
 
     let l:results = "select\n"
-    let l:results.= <SID>ExecuteSystem('psql -tAc ' . shellescape(l:sql)) . "\n"
+    let l:results.= <SID>SystemExecute('psql -tAc ' . shellescape(l:sql)) . "\n"
     let l:results.= "from " . l:selection . "\n"
     let l:results.= "where true\n"
     let l:results.= "order by 1\n"
@@ -224,12 +287,10 @@ function! s:SelectOperator(type)
         execute "normal! `["
     endif 
 endfunction
-
 nnoremap <buffer> <leader>s :set operatorfunc=<SID>SelectOperator<cr>g@
 vnoremap <buffer> <leader>s :<c-u>call <SID>SelectOperator(visualmode())<cr>
-" ------------------------------------------------------------------------- }}}
-
-" 'in array' operator {{{ -----------------------------------------------------
+" END SelectOperator() }}}
+" InArrayOperator() {{{
 function! s:InArrayOperator(type)
     if a:type !=# 'V'
         return
@@ -282,9 +343,8 @@ endfunction
 
 nnoremap <buffer> <leader>ia :set operatorfunc=<SID>InArrayOperator<cr>g@
 vnoremap <buffer> <leader>ia :<c-u>call <SID>InArrayOperator(visualmode())<cr>
-" ------------------------------------------------------------------------- }}}
-
-" 'join using' operator {{{ ---------------------------------------------------
+" END InArrayOperator() }}}
+" JoinUsingOperator() {{{
 function! s:JoinUsingOperator(type)
     let l:old_register = @@
     if a:type ==# 'v'
@@ -305,9 +365,8 @@ endfunction
 
 nnoremap <buffer> <leader>ju :set operatorfunc=<SID>JoinUsingOperator<cr>g@
 vnoremap <buffer> <leader>ju :<c-u>call <SID>JoinUsingOperator(visualmode())<cr>
-" ------------------------------------------------------------------------- }}}
-
-" 'join on' operator {{{ ------------------------------------------------------
+" END JoinUsingOperator() }}}
+" JoinOnOperator() {{{
 function! s:JoinOnOperator(type)
     let l:old_register = @@
     if a:type ==# 'v'
@@ -325,9 +384,7 @@ function! s:JoinOnOperator(type)
 
     let @@ = l:old_register
 endfunction
-
 nnoremap <buffer> <leader>jo :set operatorfunc=<SID>JoinOnOperator<cr>g@
 vnoremap <buffer> <leader>jo :<c-u>call <SID>JoinOnOperator(visualmode())<cr>
-" ------------------------------------------------------------------------- }}}
-" ========================================================================= }}}
-
+" END JoinOnOperator() }}}
+" END CUSTOM OPERATORS }}}
