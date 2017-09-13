@@ -1,5 +1,5 @@
 " PLUGIN SETUP {{{
-if exists("b:did_ftplugin")
+if exists("b:did_ftplugin") && b:did_ftplugin != 1
   finish
 endif
 let b:did_ftplugin = 1
@@ -368,6 +368,7 @@ function! s:JoinUsingOperator(type)
     execute "normal! ijoin \<esc>" . l:s . "la using ()\<esc>"
 
     let @@ = l:old_register
+    startinsert
 endfunction
 
 nnoremap <buffer> <leader>ju :set operatorfunc=<SID>JoinUsingOperator<cr>g@
@@ -387,11 +388,92 @@ function! s:JoinOnOperator(type)
     endif 
 
     let l:s = strlen(@@)
-    execute "normal! ijoin \<esc>" . l:s . "la on \<esc>"
+    execute "normal! ijoin \<esc>" . l:s . "la on  \<esc>"
 
     let @@ = l:old_register
+    startinsert
 endfunction
 nnoremap <buffer> <leader>jo :set operatorfunc=<SID>JoinOnOperator<cr>g@
 vnoremap <buffer> <leader>jo :<c-u>call <SID>JoinOnOperator(visualmode())<cr>
 " END JoinOnOperator() }}}
 " END CUSTOM OPERATORS }}}
+"
+
+function! s:PsqlDoSwitch()
+    let l:line = getline(line('.'))
+    let l:pghost = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\1', '')
+    let l:pgport = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\2', '')
+    let l:pgdatabase = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\3', '')
+    if l:pgdatabase == '*'
+        let l:pgdatabase = ''
+    endif
+    let l:pguser = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\4', '')
+    :q!
+
+    let w:pghost = l:pghost
+    let w:pgport = l:pgport
+    let w:pgdatabase = l:pgdatabase
+    let w:pguser = l:pguser
+endfunction
+
+function! s:PsqlSwitch()
+    new
+    setlocal buftype=nofile
+    setlocal bufhidden=hide
+    setlocal noswapfile
+    r !cat ~/.pgpass | cut -f 1-4 -d :
+    normal ggddO# Select a line and press enter to switch.
+    normal gg0
+    nnoremap <buffer> <cr> :call <SID>PsqlDoSwitch()<cr>
+endfunction
+
+function! s:PsqlExecute(type, output) range
+    let l:command = ''
+    if a:type == 'line' || a:type == 'block' || a:type == 'visual'
+        let l:command = a:firstline . ',' . a:lastline
+    else
+        let l:command = ''    
+    endif
+
+    let l:command .= 'w !psql '
+    if exists('w:pghost')
+        let l:command .= '-h ' . w:pghost . ' '
+    endif
+
+    if exists('w:pgport')
+        let l:command .= '-p ' . w:pgport . ' '
+    endif
+
+    if exists('w:pgdatabase')
+        let l:command .= '-d ' . w:pgdatabase . ' '
+    endif
+
+    if exists('w:pguser')
+        let l:command .= '-U ' . w:pguser . ' '
+    endif
+
+    if a:output == 'read'
+        let l:tmpfile = tempname()
+        let l:command .= ' 2>&1 | sed "s/^/-- /g" > ' . shellescape(l:tmpfile)
+    else
+        let l:command .= ' 2>&1 | less'
+    endif
+
+    silent execute l:command
+
+    if a:output == 'read'
+        if a:type == 'line' || a:type == 'block' || a:type == 'visual'
+            silent normal '>g
+        else
+            silent normal G
+        endif
+
+        let l:command = 'r !cat ' . shellescape(l:tmpfile)
+        silent execute l:command
+    endif
+endfunction
+
+
+nnoremap <f4> :call <SID>PsqlSwitch()<cr>
+nnoremap <f5> :call <SID>PsqlExecute('file', 'stdout')<cr>
+vnoremap <f5> :call <SID>PsqlExecute('line', 'stdout')<cr>
