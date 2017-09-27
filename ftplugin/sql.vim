@@ -1,5 +1,5 @@
 " PLUGIN SETUP {{{
-if exists("b:did_ftplugin")
+if exists("b:did_ftplugin") && b:did_ftplugin != 1
   finish
 endif
 let b:did_ftplugin = 1
@@ -369,6 +369,7 @@ function! s:JoinUsingOperator(type)
     execute "normal! ijoin \<esc>" . l:s . "la using ()\<esc>"
 
     let @@ = l:old_register
+    startinsert
 endfunction
 
 nnoremap <buffer> <leader>ju :set operatorfunc=<SID>JoinUsingOperator<cr>g@
@@ -388,16 +389,17 @@ function! s:JoinOnOperator(type)
     endif 
 
     let l:s = strlen(@@)
-    execute "normal! ijoin \<esc>" . l:s . "la on \<esc>"
+    execute "normal! ijoin \<esc>" . l:s . "la on  \<esc>"
 
     let @@ = l:old_register
+    startinsert
 endfunction
 nnoremap <buffer> <leader>jo :set operatorfunc=<SID>JoinOnOperator<cr>g@
 vnoremap <buffer> <leader>jo :<c-u>call <SID>JoinOnOperator(visualmode())<cr>
 " END JoinOnOperator() }}}
 " END CUSTOM OPERATORS }}}
 
-function! PsqlDoSwitch()
+function! s:PsqlDoSwitch()
     let l:line = getline(line('.'))
     let l:pghost = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\1', '')
     let l:pgport = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\2', '')
@@ -414,7 +416,7 @@ function! PsqlDoSwitch()
     let w:pguser = l:pguser
 endfunction
 
-function! PsqlSwitch()
+function! s:PsqlSwitch()
     new
     setlocal buftype=nofile
     setlocal bufhidden=hide
@@ -422,10 +424,10 @@ function! PsqlSwitch()
     r !cat ~/.pgpass | cut -f 1-4 -d :
     normal ggddO# Select a line and press enter to switch.
     normal gg0
-    nnoremap <buffer> <cr> :call PsqlDoSwitch()<cr>
+    nnoremap <buffer> <cr> :call <SID>PsqlDoSwitch()<cr>
 endfunction
 
-function! PsqlExecute(type, output) range
+function! s:PsqlExecute(type, output) range
     let l:command = ''
     if a:type == 'line' || a:type == 'block' || a:type == 'visual'
         let l:command = a:firstline . ',' . a:lastline
@@ -471,9 +473,6 @@ function! PsqlExecute(type, output) range
     endif
 endfunction
 
-nnoremap <f4> :call PsqlSwitch()<cr>
-nnoremap <f5> :call PsqlExecute('file', 'page')<cr>
-vnoremap <f5> :call PsqlExecute('line', 'page')<cr>
-nnoremap <f6> :call PsqlExecute('file', 'read')<cr>
-vnoremap <f6> :call PsqlExecute('line', 'read')<cr>
-
+nnoremap <f4> :call <SID>PsqlSwitch()<cr>
+nnoremap <f5> :call <SID>PsqlExecute('file', 'stdout')<cr>
+vnoremap <f5> :call <SID>PsqlExecute('line', 'stdout')<cr>
