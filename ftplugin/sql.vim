@@ -5,6 +5,7 @@ endif
 let b:did_ftplugin = 1
 " END PLUGIN SETUP }}}
 " TODOS {{{
+" TODO: Add a script to transform lines into an SQL "where in" clause.
 " TODO: A TableColumns function, which returns a list?
 " TODO: A TablePrimaryKey function, which returns a list?
 "       E.g., alternatively, this could be a motion. That is, select a word
@@ -395,3 +396,84 @@ nnoremap <buffer> <leader>jo :set operatorfunc=<SID>JoinOnOperator<cr>g@
 vnoremap <buffer> <leader>jo :<c-u>call <SID>JoinOnOperator(visualmode())<cr>
 " END JoinOnOperator() }}}
 " END CUSTOM OPERATORS }}}
+
+function! PsqlDoSwitch()
+    let l:line = getline(line('.'))
+    let l:pghost = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\1', '')
+    let l:pgport = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\2', '')
+    let l:pgdatabase = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\3', '')
+    if l:pgdatabase == '*'
+        let l:pgdatabase = ''
+    endif
+    let l:pguser = substitute(l:line, '^\([^:]\+\):\([^:]\+\):\([^:]\+\):\(.*\)$', '\4', '')
+    :q!
+
+    let w:pghost = l:pghost
+    let w:pgport = l:pgport
+    let w:pgdatabase = l:pgdatabase
+    let w:pguser = l:pguser
+endfunction
+
+function! PsqlSwitch()
+    new
+    setlocal buftype=nofile
+    setlocal bufhidden=hide
+    setlocal noswapfile
+    r !cat ~/.pgpass | cut -f 1-4 -d :
+    normal ggddO# Select a line and press enter to switch.
+    normal gg0
+    nnoremap <buffer> <cr> :call PsqlDoSwitch()<cr>
+endfunction
+
+function! PsqlExecute(type, output) range
+    let l:command = ''
+    if a:type == 'line' || a:type == 'block' || a:type == 'visual'
+        let l:command = a:firstline . ',' . a:lastline
+    else
+        let l:command = ''    
+    endif
+
+    let l:command .= 'w !psql '
+    if exists('w:pghost')
+        let l:command .= '-h ' . w:pghost . ' '
+    endif
+
+    if exists('w:pgport')
+        let l:command .= '-p ' . w:pgport . ' '
+    endif
+
+    if exists('w:pgdatabase')
+        let l:command .= '-d ' . w:pgdatabase . ' '
+    endif
+
+    if exists('w:pguser')
+        let l:command .= '-U ' . w:pguser . ' '
+    endif
+
+    if a:output == 'read'
+        let l:tmpfile = tempname()
+        let l:command .= ' 2>&1 | sed "s/^/-- /g" > ' . shellescape(l:tmpfile)
+    else
+        let l:command .= ' 2>&1 | less'
+    endif
+
+    silent execute l:command
+
+    if a:output == 'read'
+        if a:type == 'line' || a:type == 'block' || a:type == 'visual'
+            silent normal '>g
+        else
+            silent normal G
+        endif
+
+        let l:command = 'r !cat ' . shellescape(l:tmpfile)
+        silent execute l:command
+    endif
+endfunction
+
+nnoremap <f4> :call PsqlSwitch()<cr>
+nnoremap <f5> :call PsqlExecute('file', 'page')<cr>
+vnoremap <f5> :call PsqlExecute('line', 'page')<cr>
+nnoremap <f6> :call PsqlExecute('file', 'read')<cr>
+vnoremap <f6> :call PsqlExecute('line', 'read')<cr>
+
