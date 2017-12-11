@@ -130,8 +130,7 @@ function! s:SqlEscapeIdentifier(str)
 endfunction
 " End SqlEscapeIdentifier() }}}
 " END SQL ESCAPE FUNCTIONS }}}
-" SQL TABLE FUNCTIONS {{{
-" SqlTableQualified() {{{
+
 " This function takes a string representing a table name
 " (with optional schema and alias components) and returns a dictionary.
 " This dictionary contains three keys: schema, table and alias
@@ -162,13 +161,13 @@ function! s:SqlTableQualified(name)
     let l:result = {'schema':l:schema, 'table':l:table, 'alias':l:alias}
     return l:result
 endfunction
-" END SqlTableQualified() }}}
-" SqlTableDequalified() {{{
+
+" This function takes a list (created by SqlTableQualified)
+" and returns a string in "schema.table alias" form.
 function! s:SqlTableDequalified(table)
     let l:result = ''
 
     if 0 != strlen(a:table.schema)
-        " TODO: Finish this!
         let l:result = a:table.schema . '.'
     endif
 
@@ -180,9 +179,7 @@ function! s:SqlTableDequalified(table)
 
     return l:result
 endfunction
-" END SqlTableDequalified() }}}
-" END SQL TABLE FUNCTIONS }}}
-" CUSTOM OPERATORS {{{
+
 " SqlTableColumns() {{{
 " TODO: Change all functions to accept a string for a table name -
 " the calling function should always qualify it.
@@ -219,8 +216,7 @@ function! s:SqlTableColumns(table)
     let l:results.= "order by 1\n"
     let l:results.= ";\n"
 endfunction
-" END SqlTableColumns() }}}
-" SqlTableDoesExist() {{{
+
 function! s:SqlTableDoesExist(name)
     let l:table = <SID>SqlTableQualified(a:name)
 
@@ -237,8 +233,7 @@ function! s:SqlTableDoesExist(name)
 
     return l:count
 endfunction
-" END SqlTableDoesExist() }}}
-" SelectOperator() {{{
+
 function! s:SelectOperator(type)
     let l:old_register = @@
 
@@ -294,10 +289,13 @@ function! s:SelectOperator(type)
     elseif a:type ==# 'char'
         execute "normal! `["
     endif 
+
+    /where true
 endfunction
+
 nnoremap <buffer> <leader>s :set operatorfunc=<SID>SelectOperator<cr>g@
 vnoremap <buffer> <leader>s :<c-u>call <SID>SelectOperator(visualmode())<cr>
-" END SelectOperator() }}}
+
 " InArrayOperator() {{{
 function! s:InArrayOperator(type)
     if a:type !=# 'V'
@@ -351,8 +349,8 @@ endfunction
 
 nnoremap <buffer> <leader>ia :set operatorfunc=<SID>InArrayOperator<cr>g@
 vnoremap <buffer> <leader>ia :<c-u>call <SID>InArrayOperator(visualmode())<cr>
-" END InArrayOperator() }}}
-" JoinUsingOperator() {{{
+
+" JoinUsingOperator
 function! s:JoinUsingOperator(type)
     let l:old_register = @@
     if a:type ==# 'v'
@@ -374,8 +372,8 @@ endfunction
 
 nnoremap <buffer> <leader>ju :set operatorfunc=<SID>JoinUsingOperator<cr>g@
 vnoremap <buffer> <leader>ju :<c-u>call <SID>JoinUsingOperator(visualmode())<cr>
-" END JoinUsingOperator() }}}
-" JoinOnOperator() {{{
+
+" 
 function! s:JoinOnOperator(type)
     let l:old_register = @@
     if a:type ==# 'v'
@@ -394,10 +392,9 @@ function! s:JoinOnOperator(type)
     let @@ = l:old_register
     startinsert
 endfunction
+
 nnoremap <buffer> <leader>jo :set operatorfunc=<SID>JoinOnOperator<cr>g@
 vnoremap <buffer> <leader>jo :<c-u>call <SID>JoinOnOperator(visualmode())<cr>
-" END JoinOnOperator() }}}
-" END CUSTOM OPERATORS }}}
 
 function! s:PsqlDoSwitch()
     let l:line = getline(line('.'))
@@ -428,51 +425,47 @@ function! s:PsqlSwitch()
 endfunction
 
 function! s:PsqlExecute(type, output) range
-    let l:command = ''
-    if a:type == 'line' || a:type == 'block' || a:type == 'visual'
-        let l:command = a:firstline . ',' . a:lastline
-    else
-        let l:command = ''    
-    endif
+    " Write the selected text to a file.
+    let l:sql = tempname()
 
-    let l:command .= 'w !psql '
-    if exists('w:pghost')
-        let l:command .= '-h ' . w:pghost . ' '
-    endif
-
-    if exists('w:pgport')
-        let l:command .= '-p ' . w:pgport . ' '
-    endif
-
-    if exists('w:pgdatabase')
-        let l:command .= '-d ' . w:pgdatabase . ' '
-    endif
-
-    if exists('w:pguser')
-        let l:command .= '-U ' . w:pguser . ' '
-    endif
-
-    if a:output == 'read'
-        let l:tmpfile = tempname()
-        let l:command .= ' 2>&1 | sed "s/^/-- /g" > ' . shellescape(l:tmpfile)
-    else
-        let l:command .= ' 2>&1 | less'
-    endif
+    let l:command  = a:firstline . ',' . a:lastline
+    let l:command .= 'w ' . fnameescape(l:sql)
 
     silent execute l:command
 
-    if a:output == 'read'
-        if a:type == 'line' || a:type == 'block' || a:type == 'visual'
-            silent normal '>g
-        else
-            silent normal G
-        endif
+    " Create a terminal job executing the SQL.
+    let l:command  = []
+    let l:command += ['psql']
 
-        let l:command = 'r !cat ' . shellescape(l:tmpfile)
-        silent execute l:command
+    if exists('w:pghost')
+        let l:command += ['-h ', w:pghost]
     endif
+
+    if exists('w:pgport')
+        let l:command += ['-p ', w:pgport]
+    endif
+
+    if exists('w:pgdatabase')
+        let l:command += ['-d ', w:pgdatabase]
+    endif
+
+    if exists('w:pguser')
+        let l:command += ['-U ', w:pguser]
+    endif
+
+    let l:command += ['-f', l:sql]
+
+    let l:options = {
+        \ "term_name" : "psql" ,
+        \ "term_finish" : "open",
+        \ "term_opencmd" : "10split|buffer %d",
+        \ "hidden" : 1
+        \ }
+
+    let l:result = term_start(l:command, l:options)
 endfunction
 
 nnoremap <f4> :call <SID>PsqlSwitch()<cr>
 nnoremap <f5> :call <SID>PsqlExecute('file', 'stdout')<cr>
 vnoremap <f5> :call <SID>PsqlExecute('line', 'stdout')<cr>
+
