@@ -424,11 +424,16 @@ function! s:PsqlSwitch()
     nnoremap <buffer> <cr> :call <SID>PsqlDoSwitch()<cr>
 endfunction
 
-function! s:PsqlExecute(type, output) range
+function! s:PsqlExecute(type) range
     " Write the selected text to a file.
     let l:sql = tempname()
 
-    let l:command  = a:firstline . ',' . a:lastline
+    let l:command = ''
+
+    if a:type ==# 'line'
+        let l:command .= a:firstline . ',' . a:lastline
+    endif
+
     let l:command .= 'w ' . fnameescape(l:sql)
 
     silent execute l:command
@@ -436,6 +441,7 @@ function! s:PsqlExecute(type, output) range
     " Create a terminal job executing the SQL.
     let l:command  = []
     let l:command += ['psql']
+    let l:command += ['-P', 'pager=off']
 
     if exists('w:pghost')
         let l:command += ['-h ', w:pghost]
@@ -458,7 +464,7 @@ function! s:PsqlExecute(type, output) range
     let l:options = {
         \ "term_name" : "psql" ,
         \ "term_finish" : "open",
-        \ "term_opencmd" : "10split|buffer %d",
+        \ "term_opencmd" : "split | buffer %d",
         \ "hidden" : 1
         \ }
 
@@ -466,6 +472,7 @@ function! s:PsqlExecute(type, output) range
 endfunction
 
 nnoremap <f4> :call <SID>PsqlSwitch()<cr>
-nnoremap <f5> :call <SID>PsqlExecute('file', 'stdout')<cr>
-vnoremap <f5> :call <SID>PsqlExecute('line', 'stdout')<cr>
+
+nnoremap <f5> :call <SID>PsqlExecute('file')<cr>
+vnoremap <f5> :call <SID>PsqlExecute('line')<cr>
 
