@@ -444,19 +444,19 @@ function! s:PsqlExecute(type) range
     let l:command += ['-P', 'pager=off']
 
     if exists('w:pghost')
-        let l:command += ['-h ', w:pghost]
+        let l:command += ['-h', w:pghost]
     endif
 
     if exists('w:pgport')
-        let l:command += ['-p ', w:pgport]
+        let l:command += ['-p', w:pgport]
     endif
 
     if exists('w:pgdatabase')
-        let l:command += ['-d ', w:pgdatabase]
+        let l:command += ['-d', w:pgdatabase]
     endif
 
     if exists('w:pguser')
-        let l:command += ['-U ', w:pguser]
+        let l:command += ['-U', w:pguser]
     endif
 
     let l:command += ['-f', l:sql]
