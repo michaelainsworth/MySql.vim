@@ -1,4 +1,4 @@
-function s:SqlNewWindow(where)
+function! s:SqlNewWindow(where)
     if a:where ==? 'h'
         vnew
     elseif a:where ==? 'l'
@@ -16,7 +16,7 @@ function s:SqlNewWindow(where)
     endif
 endfunction
 
-function! SqlTemp(a:where)
+function! SqlTemp(where)
     call <SID>SqlNewWindow(a:where)
 
     set buftype=nofile
