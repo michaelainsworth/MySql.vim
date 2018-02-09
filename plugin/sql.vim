@@ -16,7 +16,7 @@ function s:SqlNewWindow(where)
     endif
 endfunction
 
-function! SqlTemp()
+function! SqlTemp(a:where)
     call <SID>SqlNewWindow(a:where)
 
     set buftype=nofile
