@@ -471,8 +471,8 @@ function! s:PsqlExecute(type) range
     let l:result = term_start(l:command, l:options)
 endfunction
 
-nnoremap <f4> :call <SID>PsqlSwitch()<cr>
+nnoremap <leader>4 :call <SID>PsqlSwitch()<cr>
 
-nnoremap <f5> :call <SID>PsqlExecute('file')<cr>
-vnoremap <f5> :call <SID>PsqlExecute('line')<cr>
+nnoremap <leader>5 :call <SID>PsqlExecute('file')<cr>
+vnoremap <leader>5 :call <SID>PsqlExecute('line')<cr>
 
