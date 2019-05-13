@@ -424,9 +424,14 @@ function! s:PsqlSwitch()
     nnoremap <buffer> <cr> :call <SID>PsqlDoSwitch()<cr>
 endfunction
 
-function! s:PsqlExecute(type) range
+function! s:PsqlExecute(type, vertical) range
     " Write the selected text to a file.
     let l:sql = tempname()
+
+    if a:vertical
+        let l:command = "!echo '\\x on' > " . fnameescape(l:sql)
+        silent execute l:command
+    endif
 
     let l:command = ''
 
@@ -434,7 +439,7 @@ function! s:PsqlExecute(type) range
         let l:command .= a:firstline . ',' . a:lastline
     endif
 
-    let l:command .= 'w ' . fnameescape(l:sql)
+    let l:command .= 'w !cat >> ' . fnameescape(l:sql)
 
     silent execute l:command
 
@@ -473,6 +478,9 @@ endfunction
 
 nnoremap <leader>4 :call <SID>PsqlSwitch()<cr>
 
-nnoremap <leader>5 :call <SID>PsqlExecute('file')<cr>
-vnoremap <leader>5 :call <SID>PsqlExecute('line')<cr>
+nnoremap <leader>5 :call <SID>PsqlExecute('file', 0)<cr>
+vnoremap <leader>5 :call <SID>PsqlExecute('line', 0)<cr>
+
+nnoremap <leader>6 :call <SID>PsqlExecute('file', 1)<cr>
+vnoremap <leader>6 :call <SID>PsqlExecute('line', 1)<cr>
 
