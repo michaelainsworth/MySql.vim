@@ -12,7 +12,7 @@ function! s:SqlNewWindow(where)
     elseif a:where ==? 't'
         tabe
     else
-        echoe "Invalid split argument."
+        tabe
     endif
 endfunction
 
