@@ -446,6 +446,7 @@ function! s:PsqlExecute(type, vertical) range
     " Create a terminal job executing the SQL.
     let l:command  = []
     let l:command += ['psql']
+    let l:command += ['-1']
     let l:command += ['-P', 'pager=off']
 
     if exists('w:pghost')
